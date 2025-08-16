@@ -1,0 +1,70 @@
+name: scrape
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: '0 5 * */1 *'
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set TimeZone
+        run: |
+          sudo timedatectl set-timezone "Europe/Madrid"
+      - name: Set ENV variables
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}"
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+          PAGE_URL="https://${REPO_OWNER}.github.io/${REPO_NAME}"
+          REPO_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          echo $PAGE_URL
+          echo "PAGE_URL=${PAGE_URL}" >> $GITHUB_ENV
+          echo "REPO_URL=${REPO_URL}" >> $GITHUB_ENV
+      - name: Check out this repo
+        uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - name: Install dependence
+        run: |
+          sudo apt install tree
+          pip install -r requirements.txt
+          wget https://raw.githubusercontent.com/s-nt-s/scripts/refs/heads/master/jsondwn.py
+          python3 jsondwn.py --out ./out/ "${PAGE_URL}"
+      - name: Create DB
+        env:
+          OMDBAPI_KEY: ${{ secrets.OMDBAPI_KEY }}
+          SCRAPE_URLS: ${{ vars.SCRAPE_URLS }}
+        run: python3 create.py
+      - name: Complete DB
+        env:
+          OMDBAPI_KEY: ${{ secrets.OMDBAPI_KEY }}
+          SCRAPE_URLS: ${{ vars.SCRAPE_URLS }}
+        continue-on-error: false
+        uses: nick-fields/retry@v2
+        with:
+          timeout_minutes: 50
+          retry_wait_seconds: 60
+          max_attempts: 6
+          retry_on: any
+          command: python3 complete.py
+      - name: Create ZIP
+        run: ./zip.sh
+      - name: Upload output for deployment
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: github-pages
+          path: out/
+  deploy_site:
+    runs-on: ubuntu-latest
+    needs: scrape
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      id-token: write
+      pages: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
