@@ -1,0 +1,1 @@
+UPDATE MOVIE SET type='tvMovie' where id = 'tt27448448';
