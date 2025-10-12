@@ -73,6 +73,20 @@ class DBlite:
             yield r
         cursor.close()
 
+    def one(self, sql: str, *args):
+        cursor = self.con.cursor()
+        if len(args):
+            cursor.execute(sql, args)
+        else:
+            cursor.execute(sql)
+        r = cursor.fetchone()
+        cursor.close()
+        if not r:
+            return None
+        if isinstance(r, (tuple, list)) and len(r) == 1:
+            return r[0]
+        return r
+
     def to_tuple(self, *args, **kwargs):
         arr = []
         for i in self.select(*args, **kwargs):

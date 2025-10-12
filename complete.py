@@ -121,6 +121,18 @@ cntr = {
     **IMDB.get_countries(*ids.difference(cntr.keys()))
 }
 
+for i in ids.difference(film.keys()):
+    year = DB.one("select year from MOVIE where id = ?", i)
+    if year is None:
+        continue
+    fas = set[int] = set()
+    for tt in DB.select("select title from movie where movie = ?", i):
+        ff = FilmAffinityApi.search(tt, year)
+        if ff:
+            fas.add(ff.id)
+    if len(fas) == 1:
+        film[i] = fas.pop()
+
 film_prioridad: list[tuple[str, int]] = []
 for k, f in film.items():
     old = cntr.get(k)

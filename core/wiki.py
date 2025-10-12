@@ -558,6 +558,10 @@ if __name__ == "__main__":
     from core.config_log import config_log
     config_log("log/wiki.log")
 
+    data = WIKI.get_imdb_wiki_es()
+    for k, v in data.items():
+        print(k, v)
+    sys.exit()
     if len(sys.argv) == 1:
         from core.dblite import DBlite
         db = DBlite("imdb.sqlite", quick_release=True)
