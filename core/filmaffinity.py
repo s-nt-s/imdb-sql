@@ -115,32 +115,25 @@ class FilmAffinityApi:
         )
 
     @staticmethod
-    def search(title: str, year: int):
-        if not isinstance(title, str) or not isinstance(year, int):
-            return None
-        try:
-            qt = quote(title)
-        except TypeError:
-            return None
-        url = "https://www.filmaffinity.com/es/search.php?stype=title&em=1&stext="+qt
-        soup = _get_soup(url)
-        link = soup.select_one('link[rel="alternate"][hreflang="es"][href]')
-        _id_ = FilmAffinityApi.__extract_id_from_link(link)
-        if _id_:
-            fm = FilmAffinityApi(_id_, soup)
-            if fm.get_year() == year:
-                return fm
+    def search(year: int, *titles: str):
         ids: set[int] = set()
-        for div in soup.select("div.searchres div.card-body"):
-            span = get_text(div.select_one("span.mc-year"))
-            if span is None:
-                continue
-            if int(span) != year:
-                continue
-            link = div.select_one("a[href]")
+        for title in titles:
+            url = "https://www.filmaffinity.com/es/search.php?stype=title&em=1&stext="+quote(title)
+            soup = _get_soup(url)
+            link = soup.select_one('link[rel="alternate"][hreflang="es"][href]')
             _id_ = FilmAffinityApi.__extract_id_from_link(link)
             if _id_:
-                ids.add(_id_)
+                fm = FilmAffinityApi(_id_, soup)
+                if fm.get_year() == year:
+                    ids.add(fm.id)
+            for div in soup.select("div.searchres div.card-body"):
+                span = get_text(div.select_one("span.mc-year"))
+                if span is None or int(span) != year:
+                    continue
+                link = div.select_one("a[href]")
+                _id_ = FilmAffinityApi.__extract_id_from_link(link)
+                if _id_:
+                    ids.add(_id_)
         if len(ids) == 1:
             return FilmAffinityApi(ids.pop())
 
