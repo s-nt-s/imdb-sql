@@ -126,7 +126,7 @@ for i in ids.difference(film.keys()):
     if year is None:
         continue
     fas: set[int] = set()
-    titles = DB.to_tuple("select title from title where movie = ?", i):
+    titles = DB.to_tuple("select title from title where movie = ?", i)
     ff = FilmAffinityApi.search(year, *titles)
     if ff:
         film[i] = ff.id
