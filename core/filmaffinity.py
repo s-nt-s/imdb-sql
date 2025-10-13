@@ -116,26 +116,33 @@ class FilmAffinityApi:
 
     @staticmethod
     def search(year: int, *titles: str):
-        ids: set[int] = set()
-        for title in titles:
-            url = "https://www.filmaffinity.com/es/search.php?stype=title&em=1&stext="+quote(title)
-            soup = _get_soup(url)
-            link = soup.select_one('link[rel="alternate"][hreflang="es"][href]')
-            _id_ = FilmAffinityApi.__extract_id_from_link(link)
-            if _id_:
-                fm = FilmAffinityApi(_id_, soup)
-                if fm.get_year() == year:
-                    ids.add(fm.id)
-            for div in soup.select("div.searchres div.card-body"):
-                span = get_text(div.select_one("span.mc-year"))
-                if span is None or int(span) != year:
-                    continue
-                link = div.select_one("a[href]")
+        if not FilmAffinityApi.ACTIVE:
+            return None
+        try:
+            ids: set[int] = set()
+            for title in titles:
+                url = "https://www.filmaffinity.com/es/search.php?stype=title&em=1&stext="+quote(title)
+                soup = _get_soup(url)
+                link = soup.select_one('link[rel="alternate"][hreflang="es"][href]')
                 _id_ = FilmAffinityApi.__extract_id_from_link(link)
                 if _id_:
-                    ids.add(_id_)
-        if len(ids) == 1:
-            return FilmAffinityApi(ids.pop())
+                    fm = FilmAffinityApi(_id_, soup)
+                    if fm.get_year() == year:
+                        ids.add(fm.id)
+                for div in soup.select("div.searchres div.card-body"):
+                    span = get_text(div.select_one("span.mc-year"))
+                    if span is None or int(span) != year:
+                        continue
+                    link = div.select_one("a[href]")
+                    _id_ = FilmAffinityApi.__extract_id_from_link(link)
+                    if _id_:
+                        ids.add(_id_)
+            if len(ids) == 1:
+                return FilmAffinityApi(ids.pop())
+        except FilmAffinityError as e:
+            logger.critical(f"Error fetching film {year} {titles}: {e}")
+            FilmAffinityApi.ACTIVE = False
+            return None
 
     @staticmethod
     def __extract_id_from_link(a: Tag):
