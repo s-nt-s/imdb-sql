@@ -116,7 +116,13 @@ class FilmAffinityApi:
 
     @staticmethod
     def search(title: str, year: int):
-        url = "https://www.filmaffinity.com/es/search.php?stype=title&em=1&stext="+quote(title)
+        if not isinstance(title, str) or not isinstance(year, int):
+            return None
+        try:
+            qt = quote(title)
+        except TypeError:
+            return None
+        url = "https://www.filmaffinity.com/es/search.php?stype=title&em=1&stext="+qt
         soup = _get_soup(url)
         link = soup.select_one('link[rel="alternate"][hreflang="es"][href]')
         _id_ = FilmAffinityApi.__extract_id_from_link(link)
