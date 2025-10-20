@@ -505,14 +505,21 @@ class WikiApi:
         """).strip()
         re_imdb = re.compile(r"^tt\d+$")
         re_fiml = re.compile(r"^\d+$")
-        obj: dict[str, set[int]] = defaultdict(set)
+        i_f: dict[str, set[int]] = defaultdict(set)
+        f_i: dict[int, set[str]] = defaultdict(set)
         for k, v in self.__iter_k_v(query):
             if re_imdb.match(k) and re_fiml.match(v):
-                obj[k].add(int(v))
+                f = int(v)
+                i_f[k].add(f)
+                f_i[f].add(k)
         result: dict[str, int] = {}
-        for k, v in obj.items():
-            if len(v) == 1:
-                result[k] = v.pop()
+        for k, v in i_f.items():
+            if len(v) != 1:
+                continue
+            f = v.pop()
+            if len(f_i[f]) != 1:
+                continue
+            result[k] = f
         return result
 
     def get_imdb_wiki_es(self):
