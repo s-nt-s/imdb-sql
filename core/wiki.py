@@ -14,7 +14,7 @@ from urllib.error import HTTPError
 from core.country import CF
 import json
 from requests import Session
-import requests
+from types import MappingProxyType
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ re_sp = re.compile(r"\s+")
 LANGS = ('es', 'en', 'ca', 'gl', 'it', 'fr')
 
 
-def _parse_wiki_val(s: str):
+def _parse_wiki_val(s):
     if not isinstance(s, str):
         return s
     s = s.strip()
@@ -460,7 +460,6 @@ class WikiApi:
                     %s
                     AS ?priority
                 )
-
                 {
                     SELECT ?imdb (MIN(?priority) AS ?minPriority) WHERE {
                     VALUES ?imdb { %s }
@@ -485,9 +484,15 @@ class WikiApi:
         for i in bindings:
             k = i['imdb']['value']
             v = i.get('article', {}).get('value')
-            if isinstance(v, str):
-                v = v.strip()
-            if v is None or (isinstance(v, str) and len(v) == 0):
+            if None in (k, v):
+                continue
+            if not isinstance(v, str):
+                raise ValueError(f"Invalid value: {v}")
+            if not isinstance(k, str):
+                raise ValueError(f"Invalid key: {k}")
+            v = v.strip()
+            k = k.strip()
+            if 0 in map(len, (k, v)):
                 continue
             obj[k].add(v)
         obj = {k: v.pop() for k, v in obj.items() if len(v) == 1}
@@ -505,21 +510,10 @@ class WikiApi:
         """).strip()
         re_imdb = re.compile(r"^tt\d+$")
         re_fiml = re.compile(r"^\d+$")
-        i_f: dict[str, set[int]] = defaultdict(set)
-        f_i: dict[int, set[str]] = defaultdict(set)
-        for k, v in self.__iter_k_v(query):
-            if re_imdb.match(k) and re_fiml.match(v):
-                f = int(v)
-                i_f[k].add(f)
-                f_i[f].add(k)
         result: dict[str, int] = {}
-        for k, v in i_f.items():
-            if len(v) != 1:
-                continue
-            f = v.pop()
-            if len(f_i[f]) != 1:
-                continue
-            result[k] = f
+        for k, v in self.__get_dict_1_to_1(query):
+            if re_imdb.match(k) and re_fiml.match(v):
+                result[k] = int(v)
         return result
 
     def get_imdb_wiki_es(self):
@@ -533,35 +527,61 @@ class WikiApi:
             GROUP BY ?item ?k ?v
             HAVING (COUNT(?v) = 1)
         """).strip()
+        result: dict[str, str] = {}
         re_imdb = re.compile(r"^tt\d+$")
         re_url = re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
-        i_u: dict[str, set[str]] = defaultdict(set)
-        u_i: dict[str, set[str]] = defaultdict(set)
-        for k, v in self.__iter_k_v(query):
+        for k, v in self.__get_dict_1_to_1(query):
             if re_imdb.match(k) and re_url.match(v):
-                i_u[k].add(v)
-                u_i[v].add(k)
-        result: dict[str, str] = {}
-        for k, v in i_u.items():
-            if len(v) != 1:
-                continue
-            f = v.pop()
-            if len(u_i[f]) != 1:
-                continue
-            result[k] = f
+                result[k] = v
         return result
 
     def __iter_k_v(self, query: str):
         for b in self.query(query):
-            k = b['k']['value']
-            v = b['v']['value']
-            if not isinstance(k, str) or not isinstance(v, str):
+            vk = b['k']
+            vv = b['v']
+            if None in (vk, vv):
                 continue
+            if not isinstance(vk, dict):
+                raise ValueError(f"Invalid key: {vk}")
+            if not isinstance(vv, dict):
+                raise ValueError(f"Invalid value: {vv}")
+            k = _parse_wiki_val(vk.get('value'))
+            v = _parse_wiki_val(vv.get('value'))
+            if None in (k, v):
+                continue
+            if not isinstance(k, str):
+                raise ValueError(f"Invalid key: {k}")
+            if not isinstance(v, str):
+                raise ValueError(f"Invalid value: {v}")
             k = k.strip()
             v = v.strip()
             if 0 in map(len, (k, v)):
                 continue
             yield k, v
+
+    def __get_dict(self, query: str):
+        r: dict[str, list[str]] = defaultdict(list)
+        for k, v in self.__iter_k_v(query):
+            if v not in r[k]:
+                r[k].append(v)
+        obj = {k: tuple(v) for k, v in r.items()}
+        return MappingProxyType(obj)
+
+    def __get_dict_1_to_1(self, query: str):
+        obj = self.__get_dict(query)
+        rev = dict[Any, set[str]] = defaultdict(set)
+        for k, v in obj.items():
+            for x in v:
+                rev[x].add(k)
+        r: dict[str, str] = dict()
+        for k, v in obj.items():
+            if len(v) != 1:
+                continue
+            val = v[0]
+            if len(rev[val]) != 1:
+                continue
+            r[k] = val
+        return MappingProxyType(r)
 
 
 WIKI = WikiApi()
