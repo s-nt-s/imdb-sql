@@ -535,14 +535,20 @@ class WikiApi:
         """).strip()
         re_imdb = re.compile(r"^tt\d+$")
         re_url = re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
-        obj: dict[str, set[int]] = defaultdict(set)
+        i_u: dict[str, set[str]] = defaultdict(set)
+        u_i: dict[str, set[str]] = defaultdict(set)
         for k, v in self.__iter_k_v(query):
             if re_imdb.match(k) and re_url.match(v):
-                obj[k].add(v)
-        result: dict[str, int] = {}
-        for k, v in obj.items():
-            if len(v) == 1:
-                result[k] = v.pop()
+                i_u[k].add(v)
+                u_i[v].add(k)
+        result: dict[str, str] = {}
+        for k, v in i_u.items():
+            if len(v) != 1:
+                continue
+            f = v.pop()
+            if len(u_i[f]) != 1:
+                continue
+            result[k] = f
         return result
 
     def __iter_k_v(self, query: str):

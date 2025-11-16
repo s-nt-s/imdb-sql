@@ -27,7 +27,7 @@ for x, (i, year) in enumerate(DB.select('''
         year desc
     '''
 )):
-    if x < 10000:
+    if x < 10800:
         continue
     if i in done:
         continue
