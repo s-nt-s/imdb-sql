@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 re_sp = re.compile(r"\s+")
 LANGS = ('es', 'en', 'ca', 'gl', 'it', 'fr')
 
+re_imdb = re.compile(r"^tt\d+$")
+re_fiml = re.compile(r"^\d+$")
+re_wiki_url = re.compile(r"^https://\w\.wikipedia\.org/wiki/\S+$")
+
 
 def _parse_wiki_val(s):
     if not isinstance(s, str):
@@ -189,37 +193,32 @@ class WikiApi:
 
     def get_filmaffinity(self, *args):
         r: dict[str, int] = dict()
-        for k, v in self.get_dict(
+        for k, v in self.get_dict_1_to_1(
             *args,
             key_field='wdt:P345',
             val_field='wdt:P480'
         ).items():
-            vals = set(v)
-            if len(vals) == 1:
-                r[k] = vals.pop()
-        return r
+            if re_imdb.match(k) and re_fiml.match(v):
+                r[k] = int(v)
+        return MappingProxyType(r)
 
     def get_director(self, *args):
-        r: dict[str, tuple[str, ...]] = dict()
-        for k, v in self.get_dict(
+        return self.get_dict(
             *args,
             key_field='wdt:P345',
             val_field='wdt:P345',
             by_field='wdt:P57'
-        ).items():
-            if len(v):
-                r[k] = tuple(sorted(set(v)))
-        return r
+        )
 
     def get_names(self, *args: str) -> dict[str, str]:
         obj = {}
         for k, v in self.get_label_dict(*args, key_field='wdt:P345').items():
             if len(v) == 1:
-                obj[k] = v.pop()
+                obj[k] = v[0]
         return obj
 
     @retry_fetch(chunk_size=300)
-    def get_label_dict(self, *args, key_field: str = None, lang: tuple[str] = None) -> dict[str, list[str | int]]:
+    def get_label_dict(self, *args, key_field: str = None, lang: tuple[str] = None):
         if not lang:
             lang = LANGS
 
@@ -263,28 +262,15 @@ class WikiApi:
             lang_case,
             lang_case,
         )
-        r = defaultdict(set)
-        for i in self.query(query):
-            k = i['k']['value']
-            v = i.get('v', {}).get('value')
-            if isinstance(v, str):
-                v = v.strip()
-            if v is None or (isinstance(v, str) and len(v) == 0):
-                continue
-            if v.isdigit():
-                v = int(v)
-            r[k].add(v)
-        r = {k: list(v) for k, v in r.items()}
-        return r
+        return self.__get_dict(query)
 
-    @retry_fetch(chunk_size=300)
-    def get_dict(
+    def __mk_query(
         self,
         *args,
         key_field: str = None,
         val_field: str = None,
         by_field: str = None
-    ) -> dict[str, tuple[str | int, ...]]:
+    ):
         ids = " ".join(map(lambda x: x if x.startswith("wd:") else f'"{x}"', args))
         if by_field:
             query = dedent('''
@@ -322,17 +308,39 @@ class WikiApi:
                 key_field,
                 val_field,
             )
-        r = defaultdict(list)
-        for i in self.query(query):
-            k = _parse_wiki_val(i['k']['value'])
-            v = _parse_wiki_val(i.get('v', {}).get('value'))
-            if v is None:
-                continue
-            if v.isdigit():
-                v = int(v)
-            r[k].append(v)
-        r = {k: tuple(v) for k, v in r.items()}
-        return r
+        return query
+
+    @retry_fetch(chunk_size=300)
+    def get_dict(
+        self,
+        *args,
+        key_field: str = None,
+        val_field: str = None,
+        by_field: str = None
+    ):
+        query = self.__mk_query(
+            *args,
+            key_field=key_field,
+            val_field=val_field,
+            by_field=by_field
+        )
+        return self.__get_dict(query)
+
+    @retry_fetch(chunk_size=300)
+    def get_dict_1_to_1(
+        self,
+        *args,
+        key_field: str = None,
+        val_field: str = None,
+        by_field: str = None
+    ):
+        query = self.__mk_query(
+            *args,
+            key_field=key_field,
+            val_field=val_field,
+            by_field=by_field
+        )
+        return self.__get_dict_1_to_1(query)
 
     def get_alpha3(self, *args: str):
         def _get_dict(val_field: str, *vals: str):
@@ -416,24 +424,17 @@ class WikiApi:
     @retry_fetch(chunk_size=300)
     def __get_countries_from_q_lang(self, *q_lang: str):
         query = '''
-        SELECT ?language ?country WHERE {
-            VALUES ?language { %s }
+        SELECT ?k ?v WHERE {
+            VALUES ?k { %s }
             # O bien idioma oficial (P37)
-            { ?country wdt:P37 ?language . }
+            { ?v wdt:P37 ?k . }
             UNION
             # O bien lengua hablada aquí (P2936)
-            { ?country wdt:P2936 ?language . }
-            ?country wdt:P31/wdt:P279* wd:Q3624078 .
+            { ?v wdt:P2936 ?k . }
+            ?v wdt:P31/wdt:P279* wd:Q3624078 .
         }
         ''' % " ".join(q_lang)
-        obj: dict[str, set[str]] = defaultdict(set)
-        for row in self.query(query):
-            language = _parse_wiki_val(row.get('language', {}).get('value'))
-            country = _parse_wiki_val(row.get('country', {}).get('value'))
-            if language and country:
-                obj[language].add(country)
-        rtn = {k: tuple(sorted(v)) for k, v in obj.items()}
-        return rtn
+        return self.__get_dict(query)
 
     @retry_fetch(chunk_size=1000)
     def get_wiki_url(self, *args):
@@ -445,58 +446,46 @@ class WikiApi:
         order.append(f"{len_order}" + (')' * len_order))
         order_str = " ".join(order)
 
-        bindings = self.query(
-            """
-                SELECT ?imdb ?article WHERE {
-                VALUES ?imdb { %s }
+        query = dedent("""
+            SELECT ?k ?v WHERE {
+            VALUES ?k { %s }
 
-                ?item wdt:P345 ?imdb .
-                ?article schema:about ?item ;
+            ?item wdt:P345 ?k .
+            ?v schema:about ?item ;
+                    schema:isPartOf ?site .
+
+            FILTER(CONTAINS(STR(?site), "wikipedia.org"))
+
+            BIND(
+                %s
+                AS ?priority
+            )
+            {
+                SELECT ?k (MIN(?priority) AS ?minPriority) WHERE {
+                VALUES ?k { %s }
+                ?item wdt:P345 ?k .
+                ?v schema:about ?item ;
                         schema:isPartOf ?site .
-
                 FILTER(CONTAINS(STR(?site), "wikipedia.org"))
-
                 BIND(
                     %s
                     AS ?priority
                 )
-                {
-                    SELECT ?imdb (MIN(?priority) AS ?minPriority) WHERE {
-                    VALUES ?imdb { %s }
-                    ?item wdt:P345 ?imdb .
-                    ?article schema:about ?item ;
-                            schema:isPartOf ?site .
-                    FILTER(CONTAINS(STR(?site), "wikipedia.org"))
-                    BIND(
-                        %s
-                        AS ?priority
-                    )
-                    }
-                    GROUP BY ?imdb
                 }
+                GROUP BY ?k
+            }
 
-                FILTER(?priority = ?minPriority)
-                }
-                ORDER BY ?imdb
-            """ % (ids, order_str, ids, order_str)
-        )
-        obj: dict[str, set[str]] = defaultdict(set)
-        for i in bindings:
-            k = i['imdb']['value']
-            v = i.get('article', {}).get('value')
-            if None in (k, v):
-                continue
-            if not isinstance(v, str):
-                raise ValueError(f"Invalid value: {v}")
-            if not isinstance(k, str):
-                raise ValueError(f"Invalid key: {k}")
-            v = v.strip()
-            k = k.strip()
-            if 0 in map(len, (k, v)):
-                continue
-            obj[k].add(v)
-        obj = {k: v.pop() for k, v in obj.items() if len(v) == 1}
-        return obj
+            FILTER(?priority = ?minPriority)
+            }
+            ORDER BY ?k
+        """ % (ids, order_str, ids, order_str)
+        ).strip()
+
+        result: dict[str, str] = {}
+        for k, v in self.__get_dict_1_to_1(query):
+            if re_imdb.match(k) and re_wiki_url.match(v):
+                result[k] = v
+        return result
 
     def get_imdb_filmaffinity(self):
         query = dedent("""
@@ -508,8 +497,6 @@ class WikiApi:
         GROUP BY ?item ?k ?v
         HAVING (COUNT(?v) = 1)
         """).strip()
-        re_imdb = re.compile(r"^tt\d+$")
-        re_fiml = re.compile(r"^\d+$")
         result: dict[str, int] = {}
         for k, v in self.__get_dict_1_to_1(query):
             if re_imdb.match(k) and re_fiml.match(v):
@@ -528,10 +515,9 @@ class WikiApi:
             HAVING (COUNT(?v) = 1)
         """).strip()
         result: dict[str, str] = {}
-        re_imdb = re.compile(r"^tt\d+$")
-        re_url = re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
+        re_wiki_es_url = re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
         for k, v in self.__get_dict_1_to_1(query):
-            if re_imdb.match(k) and re_url.match(v):
+            if re_imdb.match(k) and re_wiki_es_url.match(v):
                 result[k] = v
         return result
 
