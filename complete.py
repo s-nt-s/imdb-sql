@@ -186,48 +186,6 @@ dump_dict('wikipedia')
 dump_dict('filmaffinity')
 dump_dict('countries')
 
-i_f = WIKI.get_imdb_filmaffinity()
-i_w = WIKI.get_imdb_wiki_es()
-
-in_extra = DB.to_tuple("select movie from EXTRA")
-in_movie = DB.to_tuple("select id from MOVIE")
-has_fa = DB.to_tuple("select movie from EXTRA where filmaffinity is not null")
-has_wiki = DB.to_tuple("select movie from EXTRA where wikipedia is not null")
-
-for imdb in union(i_f, i_w):
-    if imdb not in in_movie:
-        continue
-    f = i_f.get(imdb)
-    w = i_w.get(imdb)
-    if (f, w) == (None, None):
-        continue
-    if imdb not in in_extra:
-        DB.executemany(
-            "INSERT INTO EXTRA (movie, filmaffinity, wikipedia) values (?, ?, ?)",
-            (imdb, f, w)
-        )
-        continue
-    if imdb not in has_wiki and imdb not in has_fa:
-        DB.executemany(
-            "UPDATE EXTRA SET filmaffinity=?, wikipedia=? where movie=?",
-            (f, w, imdb)
-        )
-        continue
-    if imdb not in has_fa:
-        DB.executemany(
-            "UPDATE EXTRA SET filmaffinity=? where movie=?",
-            (f, imdb)
-        )
-    if imdb not in has_wiki:
-        DB.executemany(
-            "UPDATE EXTRA SET wikipedia=? where movie=?",
-            (w, imdb)
-        )
-
-
-DB.flush()
-DB.commit()
-
 if CF.error:
     for e in CF.error:
         logger.critical(e)

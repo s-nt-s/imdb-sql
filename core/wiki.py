@@ -1,6 +1,6 @@
 from textwrap import dedent
 import logging
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Optional
 from functools import cache
 import re
 from time import sleep
@@ -79,7 +79,12 @@ def retry_fetch(chunk_size=5000):
             undone = set(args).difference({None, ''})
             if len(undone) == 0:
                 return {}
-            key_cache = json.dumps((func.__name__, kwargs), sort_keys=True)
+            kwargs_to_json = {}
+            for k, v in kwargs.items():
+                if isinstance(v, re.Pattern):
+                    v = (v.pattern, v.flags)
+                kwargs_to_json[k] = v
+            key_cache = json.dumps((func.__name__, kwargs_to_json), sort_keys=True)
             result = dict()
             for a in undone:
                 val = internal_cache.get((key_cache, a))
@@ -192,18 +197,17 @@ class WikiApi:
         return bindings
 
     def get_filmaffinity(self, *args):
-        r: dict[str, int] = dict()
-        for k, v in self.get_dict_1_to_1(
+        obj = self.get_dict_1_to_1(
             *args,
             key_field='wdt:P345',
-            val_field='wdt:P480'
-        ).items():
-            if re_imdb.match(k) and re_fiml.match(v):
-                r[k] = int(v)
-        return MappingProxyType(r)
+            val_field='wdt:P480',
+            re_k=re_imdb,
+            re_v=re_fiml
+        )
+        return MappingProxyType({k: int(v) for k, v in obj.items()})
 
     def get_director(self, *args):
-        return self.get_dict(
+        return self.get_dict_uniq_tuple(
             *args,
             key_field='wdt:P345',
             val_field='wdt:P345',
@@ -262,7 +266,7 @@ class WikiApi:
             lang_case,
             lang_case,
         )
-        return self.__get_dict(query)
+        return self.__get_dict_uniq_tuple(query)
 
     def __mk_query(
         self,
@@ -311,12 +315,14 @@ class WikiApi:
         return query
 
     @retry_fetch(chunk_size=300)
-    def get_dict(
+    def get_dict_uniq_tuple(
         self,
         *args,
         key_field: str = None,
         val_field: str = None,
-        by_field: str = None
+        by_field: str = None,
+        re_k: Optional[re.Pattern] = None,
+        re_v: Optional[re.Pattern] = None
     ):
         query = self.__mk_query(
             *args,
@@ -324,7 +330,7 @@ class WikiApi:
             val_field=val_field,
             by_field=by_field
         )
-        return self.__get_dict(query)
+        return self.__get_dict_uniq_tuple(query, re_k=re_k, re_v=re_v)
 
     @retry_fetch(chunk_size=300)
     def get_dict_1_to_1(
@@ -332,7 +338,9 @@ class WikiApi:
         *args,
         key_field: str = None,
         val_field: str = None,
-        by_field: str = None
+        by_field: str = None,
+        re_k: Optional[re.Pattern] = None,
+        re_v: Optional[re.Pattern] = None
     ):
         query = self.__mk_query(
             *args,
@@ -340,12 +348,12 @@ class WikiApi:
             val_field=val_field,
             by_field=by_field
         )
-        return self.__get_dict_1_to_1(query)
+        return self.__get_dict_1_to_1(query, re_k=re_k, re_v=re_v)
 
     def get_alpha3(self, *args: str):
         def _get_dict(val_field: str, *vals: str):
             obj: dict[str, str] = {}
-            for k, v in self.get_dict(*vals, key_field=None, val_field=val_field).items():
+            for k, v in self.get_dict_uniq_tuple(*vals, key_field=None, val_field=val_field).items():
                 set_v = set(map(CF.parse_alpha3, v))
                 set_v.discard(None)
                 if len(set_v) == 1:
@@ -367,7 +375,7 @@ class WikiApi:
     @cache
     def get_countries(self, *args: str):
         def _get_dict(val_field: str, by_field: str = None):
-            return self.get_dict(*args, key_field="wdt:P345", val_field=val_field, by_field=by_field)
+            return self.get_dict_uniq_tuple(*args, key_field="wdt:P345", val_field=val_field, by_field=by_field)
 
         data: dict[str, dict[str, tuple[str, ...]]] = dict(
             main=_get_dict(val_field="wdt:P495"),
@@ -404,11 +412,11 @@ class WikiApi:
             )
         return r
 
-    def __get_countries_from_lang(self, *imdb: str):
+    def __get_countries_from_lang(self, *imdb: str) -> dict[str, tuple[str, ...]]:
         imdb = tuple(sorted(set(imdb)))
         if len(imdb) == 0:
             return {}
-        imdb_lang = self.get_dict(*imdb, key_field="wdt:P345", val_field="wdt:P364")
+        imdb_lang = self.get_dict_uniq_tuple(*imdb, key_field="wdt:P345", val_field="wdt:P364")
         q_lang: set[str] = set()
         for lg in imdb_lang.values():
             q_lang.update(lg)
@@ -434,7 +442,7 @@ class WikiApi:
             ?v wdt:P31/wdt:P279* wd:Q3624078 .
         }
         ''' % " ".join(q_lang)
-        return self.__get_dict(query)
+        return self.__get_dict_uniq_tuple(query)
 
     @retry_fetch(chunk_size=1000)
     def get_wiki_url(self, *args):
@@ -480,12 +488,11 @@ class WikiApi:
             ORDER BY ?k
         """ % (ids, order_str, ids, order_str)
         ).strip()
-
-        result: dict[str, str] = {}
-        for k, v in self.__get_dict_1_to_1(query):
-            if re_imdb.match(k) and re_wiki_url.match(v):
-                result[k] = v
-        return result
+        return self.__get_dict_1_to_1(
+            query,
+            re_k=re_imdb,
+            re_v=re_wiki_url
+        )
 
     def get_imdb_filmaffinity(self):
         query = dedent("""
@@ -497,11 +504,12 @@ class WikiApi:
         GROUP BY ?item ?k ?v
         HAVING (COUNT(?v) = 1)
         """).strip()
-        result: dict[str, int] = {}
-        for k, v in self.__get_dict_1_to_1(query):
-            if re_imdb.match(k) and re_fiml.match(v):
-                result[k] = int(v)
-        return result
+        obj = self.__get_dict_1_to_1(
+            query,
+            re_k=re_imdb,
+            re_v=re_fiml
+        )
+        return MappingProxyType({k: int(v) for k, v in obj.items()})
 
     def get_imdb_wiki_es(self):
         query = dedent("""
@@ -514,14 +522,18 @@ class WikiApi:
             GROUP BY ?item ?k ?v
             HAVING (COUNT(?v) = 1)
         """).strip()
-        result: dict[str, str] = {}
-        re_wiki_es_url = re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
-        for k, v in self.__get_dict_1_to_1(query):
-            if re_imdb.match(k) and re_wiki_es_url.match(v):
-                result[k] = v
-        return result
+        return self.__get_dict_1_to_1(
+            query,
+            re_k=re_imdb,
+            re_v=re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
+        )
 
-    def __iter_k_v(self, query: str):
+    def __iter_k_v(
+        self,
+        query: str,
+        re_k: Optional[re.Pattern] = None,
+        re_v: Optional[re.Pattern] = None
+    ):
         for b in self.query(query):
             vk = b['k']
             vv = b['v']
@@ -543,19 +555,33 @@ class WikiApi:
             v = v.strip()
             if 0 in map(len, (k, v)):
                 continue
+            if re_k and not re_k.match(k):
+                continue
+            if re_v and not re_v.match(v):
+                continue
             yield k, v
 
-    def __get_dict(self, query: str):
+    def __get_dict_uniq_tuple(
+        self,
+        query: str,
+        re_k: Optional[re.Pattern] = None,
+        re_v: Optional[re.Pattern] = None
+    ):
         r: dict[str, list[str]] = defaultdict(list)
-        for k, v in self.__iter_k_v(query):
+        for k, v in self.__iter_k_v(query, re_k=re_k, re_v=re_v):
             if v not in r[k]:
                 r[k].append(v)
         obj = {k: tuple(v) for k, v in r.items()}
         return MappingProxyType(obj)
 
-    def __get_dict_1_to_1(self, query: str):
-        obj = self.__get_dict(query)
-        rev = dict[Any, set[str]] = defaultdict(set)
+    def __get_dict_1_to_1(
+        self,
+        query: str,
+        re_k: Optional[re.Pattern] = None,
+        re_v: Optional[re.Pattern] = None
+    ):
+        obj = self.__get_dict_uniq_tuple(query, re_k=re_k, re_v=re_v)
+        rev: dict[Any, set[str]] = defaultdict(set)
         for k, v in obj.items():
             for x in v:
                 rev[x].add(k)
@@ -577,14 +603,14 @@ if __name__ == "__main__":
     from core.config_log import config_log
     config_log("log/wiki.log")
 
-    data = WIKI.get_imdb_wiki_es()
-    for k, v in data.items():
-        print(k, v)
-    sys.exit()
+    #data = WIKI.get_imdb_wiki_es()
+    #for k, v in data.items():
+    #    print(k, v)
+    #sys.exit()
     if len(sys.argv) == 1:
         from core.dblite import DBlite
         db = DBlite("imdb.sqlite", quick_release=True)
-        ids = db.to_tuple("select id from movie limit 3000")
+        ids = db.to_tuple("select id from movie limit 100")
         ok = WIKI.get_countries(*ids)
         print(len(ok))
         sys.exit()
