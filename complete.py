@@ -110,6 +110,8 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
     if len(ids):
         ids = DB.to_tuple(f"select id from movie where id {gW(ids)}", *ids)
 
+    ids = set(ids)
+
     film = {
         **film,
         **WIKI.get_filmaffinity(*ids.difference(film.keys()))
