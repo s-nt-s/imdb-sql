@@ -100,8 +100,8 @@ class FilmAffinityApi:
             return None
         return api.toFilmAffinity()
 
-    @cache
     @classmethod
+    @cache
     def __scrape(cls, url: str):
         if not isinstance(url, str):
             return set()

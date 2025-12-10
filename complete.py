@@ -196,7 +196,7 @@ MAIN_FILM = FilmAffinityApi.scrape(*MAIN_URLS)
 MAIN_FILM = set(MAIN_FILM).difference_update(
     DB.to_tuple("select filmaffinity from EXTRA where filmaffinity is not null")
 )
-MAIN_FILM_IMDB = WIKI.get_filmaffinity_imdb(*MAIN_FILM).values()
+MAIN_FILM_IMDB = WIKI.get_imdb(MAIN_FILM).values()
 complete(MAIN_FILM_IMDB)
 
 if CF.error:
