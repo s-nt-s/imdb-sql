@@ -11,6 +11,7 @@ from os import environ
 from core.country import CF
 from core.filmaffinity import FilmAffinityApi
 import re
+from typing import Union
 
 config_log("log/complete_db.log")
 
@@ -97,90 +98,105 @@ wiki = load_dict("wikipedia")
 film = load_dict("filmaffinity")
 cntr = load_dict("countries")
 
-ids = IMDB.scrape(*environ.get('SCRAPE_URLS', '').split())
-ids = set(ids).union(union(wiki, film, cntr))
-if len(ids):
-    ids = DB.to_tuple(f"select id from movie where id {gW(ids)}", *ids)
-
 DB.executescript(FM.load("sql/extra.sql"))
 
-ids = set(ids)
 
-logger.info(f"{len(ids)} IDS principales")
+def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
+    ids = set(ids)
 
-film = {
-    **film,
-    **WIKI.get_filmaffinity(*ids.difference(film.keys()))
-}
-wiki = {
-    **wiki,
-    **WIKI.get_wiki_url(*ids.difference(wiki.keys()))
-}
-cntr = {
-    **cntr,
-    **IMDB.get_countries(*ids.difference(cntr.keys()))
-}
+    logger.info(f"{len(ids)} IDS principales")
 
-for i in ids.difference(film.keys()):
-    year = DB.one("select year from MOVIE where id = ?", i)
-    if year is None:
-        continue
-    fas: set[int] = set()
-    titles = DB.to_tuple("select title from title where movie = ?", i)
-    ff = FilmAffinityApi.search(year, *titles)
-    if ff:
-        film[i] = ff.id
+    film = {
+        **film,
+        **WIKI.get_filmaffinity(*ids.difference(film.keys()))
+    }
+    wiki = {
+        **wiki,
+        **WIKI.get_wiki_url(*ids.difference(wiki.keys()))
+    }
+    cntr = {
+        **cntr,
+        **IMDB.get_countries(*ids.difference(cntr.keys()))
+    }
 
-film_prioridad: list[tuple[str, int]] = []
-for k, f in film.items():
-    old = cntr.get(k)
-    if isinstance(old, str) and len(old.split()) == 1:
-        film_prioridad.append((k, f))
-        continue
-    film_prioridad.insert(0, (k, f))
+    for i in ids.difference(film.keys()):
+        year = DB.one("select year from MOVIE where id = ?", i)
+        if year is None:
+            continue
+        fas: set[int] = set()
+        titles = DB.to_tuple("select title from title where movie = ?", i)
+        ff = FilmAffinityApi.search(year, *titles)
+        if ff:
+            film[i] = ff.id
 
+    film_prioridad: list[tuple[str, int]] = []
+    for k, f in film.items():
+        old = cntr.get(k)
+        if isinstance(old, str) and len(old.split()) == 1:
+            film_prioridad.append((k, f))
+            continue
+        film_prioridad.insert(0, (k, f))
 
-for k, f in film_prioridad:
-    fm = FilmAffinityApi.get(f)
-    if fm is None:
-        continue
-    if fm.country is not None:
-        cntr[k] = fm.country
-    if fm.genres and 'Telefilm' in fm.genres:
-        DB.executemany("UPDATE MOVIE SET type='tvMovie' where id = ?", (k,))
-DB.flush()
-
-for i in union(film, wiki, cntr):
-    DB.executemany(
-        "INSERT INTO EXTRA (movie, filmaffinity, wikipedia, countries) values (?, ?, ?, ?)",
-        (i, film.get(i), wiki.get(i), cntr.get(i))
-    )
-DB.flush()
-for field, (om_field, fm_field) in {
-    'year': ('Year', 'year'),
-    'duration': ('Runtime', 'duration')
-}.items():
-    if len(ids) == 0:
-        continue
-    for i in DB.to_tuple(f"select id from movie where {field} is null and id {gW(ids)}", *ids):
-        om = IMDB.get_from_omdbapi(i)
-        value = om.get(om_field) if om else None
-        if isinstance(value, str):
-            value = value.strip()
-            if value.isdecimal():
-                value = int(value)
-            elif re.match(r"^\d+ min$", value):
-                value = int(value.split()[0])
-        if not isinstance(value, int):
-            fm = FilmAffinityApi.get(film.get(i))
-            value = fm._asdict().get(fm_field) if fm else None
-        if isinstance(value, int):
-            DB.executemany(
-                f"UPDATE MOVIE SET {field}=? where id=?",
-                (value, i)
-            )
+    for k, f in film_prioridad:
+        fm = FilmAffinityApi.get(f)
+        if fm is None:
+            continue
+        if fm.country is not None:
+            cntr[k] = fm.country
+        if fm.genres and 'Telefilm' in fm.genres:
+            DB.executemany("UPDATE MOVIE SET type='tvMovie' where id = ?", (k,))
     DB.flush()
-DB.commit()
+
+    for i in union(film, wiki, cntr):
+        DB.executemany(
+            "INSERT INTO EXTRA (movie, filmaffinity, wikipedia, countries) values (?, ?, ?, ?)",
+            (i, film.get(i), wiki.get(i), cntr.get(i))
+        )
+    DB.flush()
+    for field, (om_field, fm_field) in {
+        'year': ('Year', 'year'),
+        'duration': ('Runtime', 'duration')
+    }.items():
+        if len(ids) == 0:
+            continue
+        for i in DB.to_tuple(f"select id from movie where {field} is null and id {gW(ids)}", *ids):
+            om = IMDB.get_from_omdbapi(i)
+            value = om.get(om_field) if om else None
+            if isinstance(value, str):
+                value = value.strip()
+                if value.isdecimal():
+                    value = int(value)
+                elif re.match(r"^\d+ min$", value):
+                    value = int(value.split()[0])
+            if not isinstance(value, int):
+                fm = FilmAffinityApi.get(film.get(i))
+                value = fm._asdict().get(fm_field) if fm else None
+            if isinstance(value, int):
+                DB.executemany(
+                    f"UPDATE MOVIE SET {field}=? where id=?",
+                    (value, i)
+                )
+        DB.flush()
+    DB.commit()
+
+
+MAIN_URLS = tuple(environ.get('SCRAPE_URLS', '').split())
+MAIN_IMDB = IMDB.scrape(*MAIN_URLS)
+MAIN_IMDB = set(MAIN_IMDB).union(union(wiki, film, cntr))
+if len(MAIN_IMDB):
+    MAIN_IMDB = DB.to_tuple(f"select id from movie where id {gW(MAIN_IMDB)}", *MAIN_IMDB)
+
+complete(MAIN_IMDB)
+
+MAIN_FILM = FilmAffinityApi.scrape(*MAIN_URLS)
+MAIN_FILM = set(MAIN_FILM).difference_update(
+    DB.to_tuple("select filmaffinity from EXTRA where filmaffinity is not null")
+)
+MAIN_FILM_IMDB = WIKI.get_filmaffinity_imdb(*MAIN_FILM).values()
+if len(MAIN_FILM_IMDB):
+    MAIN_FILM_IMDB = DB.to_tuple(f"select id from movie where id {gW(MAIN_FILM_IMDB)}", *MAIN_FILM_IMDB)
+
+complete(MAIN_FILM_IMDB)
 
 dump_dict('wikipedia')
 dump_dict('filmaffinity')

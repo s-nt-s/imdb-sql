@@ -8,6 +8,7 @@ import cloudscraper
 import logging
 from datetime import datetime
 from urllib.parse import quote
+from functools import cache
 
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,31 @@ class FilmAffinityApi:
         if api is None:
             return None
         return api.toFilmAffinity()
+
+    @cache
+    def __scrape(self, url: str):
+        if not isinstance(url, str):
+            return set()
+        url = url.strip()
+        if len(url) == 0:
+            return set()
+        body = FM_SCRAPER.get(url).text
+        if not isinstance(body, str):
+            return set()
+        ok: set[int] = set()
+        for re_f in (
+            r"filmaffinity\.com/[a-z]+/film(\d+).html",
+            r'"filmaffinity"\s*:\s*(\d+)'
+        ):
+            ok.update(map(int, re.findall(re_f, body)))
+        logger.debug(f"{len(ok)} ids en {url}")
+        return ok
+
+    def scrape(self, *urls: str):
+        ids = set()
+        for u in urls:
+            ids.update(self.__scrape(u))
+        return tuple(sorted(ids))
 
     def toFilmAffinity(self):
         return FilmAffinity(

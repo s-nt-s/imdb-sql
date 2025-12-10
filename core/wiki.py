@@ -511,6 +511,23 @@ class WikiApi:
         )
         return MappingProxyType({k: int(v) for k, v in obj.items()})
 
+    def get_filmaffinity_imdb(self):
+        query = dedent("""
+        SELECT ?k ?v WHERE {
+            ?item wdt:P480 ?k .
+            ?item wdt:P345 ?v .
+            FILTER(REGEX(?v, "^tt[0-9]+$"))
+        }
+        GROUP BY ?item ?k ?v
+        HAVING (COUNT(?v) = 1)
+        """).strip()
+        obj = self.__get_dict_1_to_1(
+            query,
+            re_k=re_fiml,
+            re_v=re_imdb,
+        )
+        return MappingProxyType({int(k): v for k, v in obj.items()})
+
     def get_imdb_wiki_es(self):
         query = dedent("""
             SELECT ?k ?v WHERE {
