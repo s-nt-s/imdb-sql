@@ -101,7 +101,8 @@ class FilmAffinityApi:
         return api.toFilmAffinity()
 
     @cache
-    def __scrape(self, url: str):
+    @classmethod
+    def __scrape(cls, url: str):
         if not isinstance(url, str):
             return set()
         url = url.strip()
@@ -119,10 +120,11 @@ class FilmAffinityApi:
         logger.debug(f"{len(ok)} ids en {url}")
         return ok
 
-    def scrape(self, *urls: str):
+    @classmethod
+    def scrape(cls, *urls: str):
         ids = set()
         for u in urls:
-            ids.update(self.__scrape(u))
+            ids.update(cls.__scrape(u))
         return tuple(sorted(ids))
 
     def toFilmAffinity(self):
