@@ -102,7 +102,7 @@ class FilmAffinityApi:
 
     @classmethod
     @cache
-    def __scrape(cls, url: str):
+    def __scrape(cls, url: str) -> set[int]:
         if not isinstance(url, str):
             return set()
         url = url.strip()
@@ -122,7 +122,7 @@ class FilmAffinityApi:
 
     @classmethod
     def scrape(cls, *urls: str):
-        ids = set()
+        ids: set[int] = set()
         for u in urls:
             ids.update(cls.__scrape(u))
         return tuple(sorted(ids))

@@ -119,7 +119,7 @@ class IMDBApi:
         return id_name
 
     @cache
-    def __scrape(self, url: str):
+    def __scrape(self, url: str) -> set[str]:
         if not isinstance(url, str):
             return set()
         url = url.strip()
@@ -133,7 +133,7 @@ class IMDBApi:
         return ok
 
     def scrape(self, *urls: str):
-        ids = set()
+        ids: set[str] = set()
         for u in urls:
             ids.update(self.__scrape(u))
         return tuple(sorted(ids))

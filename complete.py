@@ -189,7 +189,7 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
 MAIN_URLS = tuple(environ.get('SCRAPE_URLS', '').split())
 MAIN_IMDB = IMDB.scrape(*MAIN_URLS)
 MAIN_FILM = FilmAffinityApi.scrape(*MAIN_URLS)
-MAIN_FILM_IMDB = WIKI.get_imdb(MAIN_FILM).values()
+MAIN_FILM_IMDB = WIKI.get_imdb(*MAIN_FILM).values()
 complete(
     set(MAIN_IMDB).update(MAIN_FILM_IMDB)
 )
