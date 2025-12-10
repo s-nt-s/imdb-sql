@@ -98,8 +98,6 @@ DB.executescript(FM.load("sql/extra.sql"))
 
 
 def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
-    ids = set(ids)
-
     logger.info(f"{len(ids)} IDS principales")
 
     wiki = load_dict("wikipedia")
@@ -109,7 +107,6 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
     ids = set(ids).union(union(wiki, film, cntr))
     if len(ids):
         ids = DB.to_tuple(f"select id from movie where id {gW(ids)}", *ids)
-
     ids = set(ids)
 
     film = {
@@ -190,14 +187,12 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
 
 
 MAIN_URLS = tuple(environ.get('SCRAPE_URLS', '').split())
-complete(IMDB.scrape(*MAIN_URLS))
-
+MAIN_IMDB = IMDB.scrape(*MAIN_URLS)
 MAIN_FILM = FilmAffinityApi.scrape(*MAIN_URLS)
-MAIN_FILM = set(MAIN_FILM).difference_update(
-    DB.to_tuple("select filmaffinity from EXTRA where filmaffinity is not null")
-)
 MAIN_FILM_IMDB = WIKI.get_imdb(MAIN_FILM).values()
-complete(MAIN_FILM_IMDB)
+complete(
+    set(MAIN_IMDB).update(MAIN_FILM_IMDB)
+)
 
 if CF.error:
     for e in CF.error:
