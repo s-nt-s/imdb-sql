@@ -184,6 +184,10 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
         DB.flush()
     DB.commit()
 
+    dump_dict('wikipedia')
+    dump_dict('filmaffinity')
+    dump_dict('countries')
+
 
 MAIN_URLS = tuple(environ.get('SCRAPE_URLS', '').split())
 complete(IMDB.scrape(*MAIN_URLS))
@@ -194,10 +198,6 @@ MAIN_FILM = set(MAIN_FILM).difference_update(
 )
 MAIN_FILM_IMDB = WIKI.get_filmaffinity_imdb(*MAIN_FILM).values()
 complete(MAIN_FILM_IMDB)
-
-dump_dict('wikipedia')
-dump_dict('filmaffinity')
-dump_dict('countries')
 
 if CF.error:
     for e in CF.error:
