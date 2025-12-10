@@ -191,7 +191,7 @@ MAIN_IMDB = IMDB.scrape(*MAIN_URLS)
 MAIN_FILM = FilmAffinityApi.scrape(*MAIN_URLS)
 MAIN_FILM_IMDB = WIKI.get_imdb(*map(str, MAIN_FILM)).values()
 complete(
-    set(MAIN_IMDB).update(MAIN_FILM_IMDB)
+    set(MAIN_IMDB).union(MAIN_FILM_IMDB)
 )
 
 if CF.error:
