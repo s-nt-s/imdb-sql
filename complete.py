@@ -94,10 +94,6 @@ def union(*args):
     return sorted(s)
 
 
-wiki = load_dict("wikipedia")
-film = load_dict("filmaffinity")
-cntr = load_dict("countries")
-
 DB.executescript(FM.load("sql/extra.sql"))
 
 
@@ -105,6 +101,14 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
     ids = set(ids)
 
     logger.info(f"{len(ids)} IDS principales")
+
+    wiki = load_dict("wikipedia")
+    film = load_dict("filmaffinity")
+    cntr = load_dict("countries")
+
+    ids = set(ids).union(union(wiki, film, cntr))
+    if len(ids):
+        ids = DB.to_tuple(f"select id from movie where id {gW(ids)}", *ids)
 
     film = {
         **film,
@@ -123,7 +127,6 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
         year = DB.one("select year from MOVIE where id = ?", i)
         if year is None:
             continue
-        fas: set[int] = set()
         titles = DB.to_tuple("select title from title where movie = ?", i)
         ff = FilmAffinityApi.search(year, *titles)
         if ff:
@@ -181,21 +184,13 @@ def complete(ids: Union[set[int], list[int], tuple[int, ...]]):
 
 
 MAIN_URLS = tuple(environ.get('SCRAPE_URLS', '').split())
-MAIN_IMDB = IMDB.scrape(*MAIN_URLS)
-MAIN_IMDB = set(MAIN_IMDB).union(union(wiki, film, cntr))
-if len(MAIN_IMDB):
-    MAIN_IMDB = DB.to_tuple(f"select id from movie where id {gW(MAIN_IMDB)}", *MAIN_IMDB)
-
-complete(MAIN_IMDB)
+complete(IMDB.scrape(*MAIN_URLS))
 
 MAIN_FILM = FilmAffinityApi.scrape(*MAIN_URLS)
 MAIN_FILM = set(MAIN_FILM).difference_update(
     DB.to_tuple("select filmaffinity from EXTRA where filmaffinity is not null")
 )
 MAIN_FILM_IMDB = WIKI.get_filmaffinity_imdb(*MAIN_FILM).values()
-if len(MAIN_FILM_IMDB):
-    MAIN_FILM_IMDB = DB.to_tuple(f"select id from movie where id {gW(MAIN_FILM_IMDB)}", *MAIN_FILM_IMDB)
-
 complete(MAIN_FILM_IMDB)
 
 dump_dict('wikipedia')
