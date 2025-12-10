@@ -285,7 +285,7 @@ class WikiApi:
         val_field: str = None,
         by_field: str = None
     ):
-        ids = " ".join(map(lambda x: x if x.startswith("wd:") else f'"{x}"', map(str, args)))
+        ids = " ".join(map(lambda x: x if x.startswith("wd:") else f'"{x}"', args))
         if by_field:
             query = dedent('''
                 SELECT ?k ?v WHERE {
