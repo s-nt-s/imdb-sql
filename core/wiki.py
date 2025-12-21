@@ -179,7 +179,21 @@ class WikiApi:
             code = e.code if isinstance(e, HTTPError) else None
             raise WikiError(str(e), self.__last_query, http_code=code) from e
 
-    def query(self, query: str) -> list[dict[str, Any]]:
+    def query(self, query: str, page_size: int = None) -> list[dict[str, Any]]:
+        if page_size is None:
+            return self.__query(query)
+        query = query + f"\nLIMIT {page_size}"
+        offset = -page_size
+        bindings = []
+        len_bak = -1
+        while len(bindings) > len_bak:
+            len_bak = len(bindings)
+            offset = offset + page_size
+            b = self.__query(query + f"\nOFFSET {offset}")
+            bindings.extend(b)
+        return bindings
+
+    def __query(self, query: str) -> list[dict[str, Any]]:
         data = self.query_sparql(query)
         if not isinstance(data, dict):
             raise WikiError(str(data), self.__last_query)
@@ -505,7 +519,6 @@ class WikiApi:
         )
 
     def get_imdb_filmaffinity(self):
-        page = 1000
         query = dedent("""
         SELECT ?k ?v WHERE {
             ?item wdt:P345 ?k .
@@ -515,21 +528,14 @@ class WikiApi:
         GROUP BY ?item ?k ?v
         HAVING (COUNT(?v) = 1)
         ORDER BY ?item
-        LIMIT
-        """).strip() + f' {page}'
-        len_bak = -1
-        all_items = {}
-        offset = - page
-        while len(all_items) > len_bak:
-            len_bak = len(all_items)
-            offset = offset + page
-            obj = self.__get_dict_1_to_1(
-                query + f"\nOFFSET {offset}",
-                re_k=re_imdb,
-                re_v=re_fiml
-            )
-            all_items = {**all_items, **obj}
-        return MappingProxyType({k: int(v) for k, v in all_items.items()})
+        """)
+        obj = self.__get_dict_1_to_1(
+            query,
+            re_k=re_imdb,
+            re_v=re_fiml,
+            page_size=1000
+        )
+        return MappingProxyType({k: int(v) for k, v in obj.items()})
 
     def get_imdb_wiki_es(self):
         query = dedent("""
@@ -541,20 +547,23 @@ class WikiApi:
             }
             GROUP BY ?item ?k ?v
             HAVING (COUNT(?v) = 1)
+            ORDER BY ?item
         """).strip()
         return self.__get_dict_1_to_1(
             query,
             re_k=re_imdb,
-            re_v=re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$")
+            re_v=re.compile(r"^https://es\.wikipedia\.org/wiki/\S+$"),
+            page_size=100
         )
 
     def __iter_k_v(
         self,
         query: str,
         re_k: Optional[re.Pattern] = None,
-        re_v: Optional[re.Pattern] = None
+        re_v: Optional[re.Pattern] = None,
+        page_size: int = None
     ):
-        for b in self.query(query):
+        for b in self.query(query, page_size=page_size):
             vk = b['k']
             vv = b['v']
             if None in (vk, vv):
@@ -585,10 +594,11 @@ class WikiApi:
         self,
         query: str,
         re_k: Optional[re.Pattern] = None,
-        re_v: Optional[re.Pattern] = None
+        re_v: Optional[re.Pattern] = None,
+        page_size: int = None
     ):
         r: dict[str, list[str]] = defaultdict(list)
-        for k, v in self.__iter_k_v(query, re_k=re_k, re_v=re_v):
+        for k, v in self.__iter_k_v(query, re_k=re_k, re_v=re_v, page_size=page_size):
             if v not in r[k]:
                 r[k].append(v)
         obj = {k: tuple(v) for k, v in r.items()}
@@ -598,9 +608,10 @@ class WikiApi:
         self,
         query: str,
         re_k: Optional[re.Pattern] = None,
-        re_v: Optional[re.Pattern] = None
+        re_v: Optional[re.Pattern] = None,
+        page_size: int = None
     ):
-        obj = self.__get_dict_uniq_tuple(query, re_k=re_k, re_v=re_v)
+        obj = self.__get_dict_uniq_tuple(query, re_k=re_k, re_v=re_v, page_size=page_size)
         rev: dict[Any, set[str]] = defaultdict(set)
         for k, v in obj.items():
             for x in v:
@@ -623,7 +634,11 @@ if __name__ == "__main__":
     from core.filemanager import FM
     config_log("log/wiki.log")
 
-    dct = FM.load_dct("rec/filmaffinity.dct.txt")
-    dct: dict[str, int] = {k: int(v) for k, v in dct.items()}
-    dct = dct = {**dct, **WIKI.get_imdb_filmaffinity()}
-    FM.dump_dct("rec/filmaffinity.dct.txt", dct)
+    #flm = FM.load_dct("rec/filmaffinity.dct.txt")
+    #flm: dict[str, int] = {k: int(v) for k, v in flm.items()}
+    #flm = {**flm, **WIKI.get_imdb_filmaffinity()}
+    #FM.dump_dct("rec/filmaffinity.dct.txt", flm)
+
+    wes = FM.load_dct("rec/wikipedia.dct.txt.txt")
+    wes = {**wes, **WIKI.get_imdb_wiki_es()}
+    FM.dump_dct("rec/wikipedia.dct.txt", wes)
