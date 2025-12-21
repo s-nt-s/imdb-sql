@@ -505,6 +505,7 @@ class WikiApi:
         )
 
     def get_imdb_filmaffinity(self):
+        page = 1000
         query = dedent("""
         SELECT ?k ?v WHERE {
             ?item wdt:P345 ?k .
@@ -513,13 +514,22 @@ class WikiApi:
         }
         GROUP BY ?item ?k ?v
         HAVING (COUNT(?v) = 1)
-        """).strip()
-        obj = self.__get_dict_1_to_1(
-            query,
-            re_k=re_imdb,
-            re_v=re_fiml
-        )
-        return MappingProxyType({k: int(v) for k, v in obj.items()})
+        ORDER BY ?item
+        LIMIT
+        """).strip() + f' {page}'
+        len_bak = -1
+        all_items = {}
+        offset = - page
+        while len(all_items) > len_bak:
+            len_bak = len(all_items)
+            offset = offset + page
+            obj = self.__get_dict_1_to_1(
+                query + f"\nOFFSET {offset}",
+                re_k=re_imdb,
+                re_v=re_fiml
+            )
+            all_items = {**all_items, **obj}
+        return MappingProxyType({k: int(v) for k, v in all_items.items()})
 
     def get_imdb_wiki_es(self):
         query = dedent("""
@@ -609,22 +619,11 @@ class WikiApi:
 WIKI = WikiApi()
 
 if __name__ == "__main__":
-    import sys
     from core.config_log import config_log
+    from core.filemanager import FM
     config_log("log/wiki.log")
 
-    #data = WIKI.get_imdb_wiki_es()
-    #for k, v in data.items():
-    #    print(k, v)
-    #sys.exit()
-    if len(sys.argv) == 1:
-        from core.dblite import DBlite
-        db = DBlite("imdb.sqlite", quick_release=True)
-        ids = db.to_tuple("select id from movie limit 100")
-        ok = WIKI.get_countries(*ids)
-        print(len(ok))
-        sys.exit()
-
-    result = WIKI.get_countries(*sys.argv[1:])
-    for k, v in result.items():
-        print(k, v)
+    dct = FM.load_dct("rec/filmaffinity.dct.txt")
+    dct: dict[str, int] = {k: int(v) for k, v in dct.items()}
+    dct = dct = {**dct, **WIKI.get_imdb_filmaffinity()}
+    FM.dump_dct("rec/filmaffinity.dct.txt", dct)
