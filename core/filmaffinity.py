@@ -238,6 +238,9 @@ class FilmAffinityApi:
         slc = "dl.movie-info span#country-img img, dl img.nflag"
         src = self.__get_attr(slc, "src")
         alt = self.__get_attr(slc, "alt")
+        if (src, alt) == (None, None):
+            logger.warning(f"Bandera no encontrada en {self.url}")
+            return None
         cod = None
         if src is not None:
             cod = src.split("/")[-1].split(".")[0]

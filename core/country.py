@@ -18,7 +18,10 @@ CUSTOM_ALIASES = {
     "TWN": ("ROC", "TAI", "Taiwán"),
     "DEU": ("GER", "Alemania"),
     "LVA": ("Letonia", ),
-    "CSK": ("Checoslovaquia", "Czechoslovakia")
+    "CSK": ("Checoslovaquia", "Czechoslovakia"),
+    "CIV": ("Côte d&#x27;Ivoire", "Côte d’Ivoire", "Côte d'Ivoire"),
+    "VDR": ("North Vietnam", "Vietnam del norte", "Viet Nam, República Democrática de"),
+    "XKS": ("XKS", "XKX", "UNK", "KOS", "YUG-KO", "Kosovo"),
 }
 
 
