@@ -98,11 +98,9 @@ def main():
     MAIN_MOVIES = populate_title_basic()
     populate_title_akas()
     populate_title_ratings(MAIN_MOVIES)
-    #  populate_title_crew(MAIN_MOVIES)
-    #  populate_names("WORKER")
     populate_title_director(MAIN_MOVIES)
-    populate_names("DIRECTOR")
-    finish_clean("DIRECTOR")
+    populate_names()
+    finish_clean()
     DB.executescript(FM.load("sql/fix.sql"))
 
 
@@ -270,61 +268,7 @@ def populate_title_director(MAIN_MOVIES: tuple[str, ...]):
         logger.warning(f"{len(MISS_DIRECTOR)} películas que no se ha podido recuperar el director")
 
 
-def populate_title_crew(MAIN_MOVIES: tuple[str, ...]):
-    for tconst, directors, writers in iter_tuples(
-        "https://datasets.imdbws.com/title.crew.tsv.gz",
-        'tconst',
-        'directors',
-        'writers'
-    ):
-        for d in directors:
-            DB.executemany(
-                "INSERT OR IGNORE INTO WORKER (movie, person, category) VALUES (?, ?, ?)",
-                (tconst, d, 'director')
-            )
-        if tconst not in MAIN_MOVIES:
-            continue
-        for w in writers:
-            DB.executemany(
-                "INSERT OR IGNORE INTO WORKER (movie, person, category) VALUES (?, ?, ?)",
-                (tconst, w, 'writer')
-            )
-    DB.flush()
-    for tconst, nconst, category, ordering in iter_tuples(
-        "https://datasets.imdbws.com/title.principals.tsv.gz",
-        'tconst',
-        'nconst',
-        'category',
-        'ordering',
-    ):
-        if category != 'director':
-            if tconst not in MAIN_MOVIES or ordering > 10 or category not in ('writer', 'actor', 'actress'):
-                continue
-        DB.executemany(
-            "INSERT OR IGNORE INTO WORKER (movie, person, category) VALUES (?, ?, ?)",
-            (tconst, nconst, category)
-        )
-    DB.flush()
-    DB.commit()
-    if MAIN_MOVIES:
-        MISS_DIRECTOR = set(DB.to_tuple(
-            f"select id from movie where id in {MAIN_MOVIES+(-1, )} and id not in (select movie from WORKER where category='director')"
-        ))
-        if MISS_DIRECTOR:
-            logger.debug(f"{len(MISS_DIRECTOR)} películas necesitan recuperar el director a mano")
-            for k, directors in WIKI.get_director(*sorted(MISS_DIRECTOR)).items():
-                MISS_DIRECTOR.discard(k)
-                for v in directors:
-                    DB.executemany(
-                        "INSERT OR IGNORE INTO WORKER (movie, person, category) VALUES (?, ?, ?)",
-                        (k, v, 'director')
-                    )
-    DB.flush()
-    if MISS_DIRECTOR:
-        logger.warning(f"{len(MISS_DIRECTOR)} películas que no se ha podido recuperar el director")
-
-
-def populate_names(table_use_person: str):
+def populate_names():
     for nconst, primaryName in iter_tuples(
         'https://datasets.imdbws.com/name.basics.tsv.gz',
         'nconst',
@@ -338,7 +282,7 @@ def populate_names(table_use_person: str):
         )
     DB.flush()
 
-    ids = DB.to_tuple(f"select distinct person from {table_use_person} where person not in (select id from PERSON)")
+    ids = DB.to_tuple(f"select distinct person from DIRECTOR where person not in (select id from PERSON)")
     for row in IMDB.get_names(*ids).items():
         DB.executemany(
             "INSERT INTO PERSON (id, name) values (?, ?)",
@@ -347,19 +291,23 @@ def populate_names(table_use_person: str):
     DB.flush()
 
 
-def finish_clean(table_use_person: str):
+def finish_clean():
     DB.commit()
+    DB.execute(
+        "DELETE FROM movie where id not in (select movie from DIRECTOR)",
+        log_level=logging.INFO
+    )
     for t in ('TITLE',):
         DB.execute(
             f"DELETE FROM {t} where movie not in (select id from MOVIE)",
             log_level=logging.INFO
         )
     DB.execute(
-        f"DELETE FROM {table_use_person} where movie not in (select id from MOVIE) OR person not in (select id from PERSON)",
+        "DELETE FROM DIRECTOR where movie not in (select id from MOVIE) OR person not in (select id from PERSON)",
         log_level=logging.INFO
     )
     DB.execute(
-        f"DELETE FROM PERSON where id not in (select person from {table_use_person})",
+        "DELETE FROM PERSON where id not in (select person from DIRECTOR)",
         log_level=logging.INFO
     )
     DB.commit()

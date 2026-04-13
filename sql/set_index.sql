@@ -1,9 +1,5 @@
 CREATE INDEX idx_tabla_year ON MOVIE(year);
 CREATE INDEX idx_director_person ON DIRECTOR(person);
-/*
-CREATE INDEX idx_worker_person ON WORKER(person);
-CREATE INDEX idx_worker_category ON WORKER(category);
-*/
 CREATE INDEX idx_person_name_nocase ON PERSON(name COLLATE NOCASE);
 CREATE INDEX idx_title_title_nocase ON TITLE(title COLLATE NOCASE);
 

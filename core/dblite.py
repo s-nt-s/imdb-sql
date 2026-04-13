@@ -45,7 +45,7 @@ class DBlite:
             logger.log(log_level, sql)
         r = self.con.execute(sql, args)
         if log_level is not None:
-            logger.log(log_level, "DONE")
+            logger.log(log_level, f"└ {r.rowcount} items")
         return r
 
     def executescript(self, sql: str):
