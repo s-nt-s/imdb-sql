@@ -18,13 +18,18 @@ CRITICAL = (
     'pycountry.db'
 )
 
-def config_log(file: str):
+def config_log(
+    file: str,
+    strmLevel = logging.INFO,
+    fileLevel = logging.DEBUG
+
+):
     file = FM.resolve_path(file)
     FM.dump(file, date.today().isoformat()+"\n")
     strmHandler = logging.StreamHandler()
     fileHandler = logging.FileHandler(str(file), mode='a')
-    strmHandler.setLevel(logging.INFO)
-    fileHandler.setLevel(logging.DEBUG)
+    strmHandler.setLevel(strmLevel)
+    fileHandler.setLevel(fileLevel)
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s %(name)s - %(levelname)s - %(message)s',

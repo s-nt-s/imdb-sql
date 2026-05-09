@@ -634,11 +634,14 @@ if __name__ == "__main__":
     from core.filemanager import FM
     config_log("log/wiki.log")
 
+    WIKI.get_countries("tt12042730", "tt8772296")
+    print(WIKI.last_query)
+
     #flm = FM.load_dct("rec/filmaffinity.dct.txt")
     #flm: dict[str, int] = {k: int(v) for k, v in flm.items()}
     #flm = {**flm, **WIKI.get_imdb_filmaffinity()}
     #FM.dump_dct("rec/filmaffinity.dct.txt", flm)
 
-    wes = FM.load_dct("rec/wikipedia.dct.txt.txt")
-    wes = {**wes, **WIKI.get_imdb_wiki_es()}
-    FM.dump_dct("rec/wikipedia.dct.txt", wes)
+    #wes = FM.load_dct("rec/wikipedia.dct.txt.txt")
+    #wes = {**wes, **WIKI.get_imdb_wiki_es()}
+    #FM.dump_dct("rec/wikipedia.dct.txt", wes)

@@ -1,0 +1,28 @@
+SELECT DISTINCT ?imdb ?filmaffinity WHERE {
+    ?item wdt:P345 ?k .
+    ?item wdt:P480 ?v .
+    FILTER(REGEX(?k, "^tt[0-9][0-9][0-9]+$"))
+    FILTER(REGEX(?v, "^[0-9][0-9][0-9]+$"))
+
+    BIND(?k AS ?imdb)
+    BIND(?v AS ?filmaffinity)
+
+    # Asegurar que k tiene solo un v
+    FILTER(NOT EXISTS {
+        ?item2 wdt:P345 ?k .
+        ?item2 wdt:P480 ?v2 .
+        FILTER(REGEX(?k, "^tt[0-9][0-9][0-9]+$"))
+        FILTER(REGEX(?v2, "^[0-9][0-9][0-9]+$"))
+        FILTER(?v2 != ?v)
+    })
+
+    # Asegurar que v tiene solo un k
+    FILTER(NOT EXISTS {
+        ?item3 wdt:P345 ?k3 .
+        ?item3 wdt:P480 ?v .
+        FILTER(REGEX(?k3, "^tt[0-9][0-9][0-9]+$"))
+        FILTER(REGEX(?v, "^[0-9][0-9][0-9]+$"))
+        FILTER(?k3 != ?k)
+    })
+}
+ORDER BY ?imdb
