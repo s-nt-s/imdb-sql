@@ -11162,7 +11162,7 @@ tt1975171 https://es.wikipedia.org/wiki/Goya,_el_secreto_de_la_sombra
 tt1975368 https://es.wikipedia.org/wiki/Beaconsfield_(pel%C3%ADcula)
 tt19760052 https://es.wikipedia.org/wiki/A_fuego_lento_(pel%C3%ADcula)
 tt1976989 https://es.wikipedia.org/wiki/Love_and_Honor
-tt1977895 https://es.wikipedia.org/wiki/Resolution_(pel%C3%ADcula)
+tt1977895 https://es.wikipedia.org/wiki/ResolutionSPARQL-QUERY: queryStr=SELECT DISTINCT ?imdb ?wiki WHERE { ?item wdt:P345 ?k . ?v schema:about ?item ; schema:isPartOf <https://es.wikipedia.org/> . FILTER(REGEX(?k, ^tt[0-9][0-9][0-9]+$"))
 tt1979169 https://es.wikipedia.org/wiki/%3F_(pel%C3%ADcula)
 tt1979269 https://es.wikipedia.org/wiki/Magic_Beyond_Words
 tt1979319 https://es.wikipedia.org/wiki/Kenshin,_el_guerrero_samur%C3%A1i
@@ -12254,6 +12254,7 @@ tt3628334 https://es.wikipedia.org/wiki/Patton_Oswalt:_Tragedy_Plus_Comedy_Equal
 tt3633118 https://es.wikipedia.org/wiki/Guardianes_de_Oz
 tt3639694 https://es.wikipedia.org/wiki/A_Thing_With_Feathers
 tt3646344 https://es.wikipedia.org/wiki/Vergine_giurata
+tt3647778 https://es.wikipedia.org/wiki/The_Flight_of_the_Condor
 tt3652526 https://es.wikipedia.org/wiki/Fuego_en_el_mar
 tt3654972 https://es.wikipedia.org/wiki/Unas_Navidades_de_esc%C3%A1ndalo
 tt3655414 https://es.wikipedia.org/wiki/Cien_a%C3%B1os_de_perd%C3%B3n

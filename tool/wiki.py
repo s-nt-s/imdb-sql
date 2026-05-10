@@ -30,10 +30,7 @@ def get_dict(
 ):
     k_v: dict[str, set] = defaultdict(set)
     v_k: dict[str, set] = defaultdict(set)
-    for r in ST.query(query):
-        if len(r) != 2:
-            continue
-        k, v = r
+    for k, v in ST.query(query):
         if k and v and re_imdb.match(k) and re_v.match(v):
             if cs_v:
                 v = cs_v(v)
