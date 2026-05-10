@@ -1,0 +1,6 @@
+SELECT DISTINCT ?k ?v WHERE {
+    ?item wdt:P345 ?k .
+    ?item wdt:P480 ?v .
+    FILTER(REGEX(?k, "^tt[0-9][0-9][0-9]+$"))
+    FILTER(REGEX(?v, "^[0-9][0-9][0-9]+$"))
+}

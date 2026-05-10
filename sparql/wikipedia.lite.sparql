@@ -1,0 +1,10 @@
+SELECT DISTINCT ?imdb ?wiki WHERE {
+    ?item wdt:P345 ?k .
+    ?v schema:about ?item ;
+       schema:isPartOf <https://es.wikipedia.org/> .
+    FILTER(REGEX(?k, "^tt[0-9][0-9][0-9]+$"))
+    FILTER(REGEX(STR(?v), "^https://es.wikipedia.org/wiki/.+$"))
+
+    BIND(?k AS ?imdb)
+    BIND(STR(?v) AS ?wiki)
+}
