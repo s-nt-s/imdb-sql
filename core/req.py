@@ -10,9 +10,10 @@ import csv
 from http.client import HTTPResponse
 from time import sleep
 from json.decoder import JSONDecodeError
+import re
 
 logger = logging.getLogger(__name__)
-
+re_sp = re.compile(r"\s+")
 
 class Req:
 
@@ -57,14 +58,23 @@ class Req:
             wait_if_status: dict[int, int] = None
     ) -> list | dict:
         frz = frozenset(headers.items()) if headers else None
+        body = None
         try:
             body = self.__get_body(url, headers=frz, data=data)
+            if body in (None, ''):
+                return None
             return json.loads(body)
         except HTTPError as e:
             wait = (wait_if_status or {}).get(e.code, 0)
             if wait <= 0:
                 raise
-        except JSONDecodeError as e:
+        except JSONDecodeError:
+            if isinstance(body, str):
+                body = re_sp.sub(body)
+                try:
+                    return json.loads(body)
+                except JSONDecodeError:
+                    pass
             logger.critical(f"NOT JSON {url}")
             raise
         sleep(wait)
