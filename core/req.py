@@ -70,7 +70,7 @@ class Req:
                 raise
         except JSONDecodeError:
             if isinstance(body, str):
-                body = re_sp.sub(body)
+                body = re_sp.sub(" ", body)
                 try:
                     return json.loads(body)
                 except JSONDecodeError:
