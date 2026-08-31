@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from urllib.parse import quote
 from functools import cache
-
+from requests.exceptions import ConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,14 @@ class FilmAffinityError(ValueError):
 
 
 def _get_soup(url: str):
-    soup = buildSoup(url, FM_SCRAPER.get(url).text)
+    try:
+        r = FM_SCRAPER.get(url)
+    except ConnectionError as e:
+        raise FilmAffinityError(f"{url} {e}")
+    text = r.text.strip()
+    if len(text) == 0:
+        raise FilmAffinityError(f"{url} body empty")
+    soup = buildSoup(url, text)
     title_none = "not title found"
     txt = get_text(soup.select_one("title")) or title_none
     if txt.lower() in (title_none, "too many request", ):
@@ -239,7 +246,7 @@ class FilmAffinityApi:
         src = self.__get_attr(slc, "src")
         alt = self.__get_attr(slc, "alt")
         if (src, alt) == (None, None):
-            logger.warning(f"Bandera no encontrada en {self.url}")
+            logger.critical(f"Bandera no encontrada en {self.url}")
             return None
         cod = None
         if src is not None:
