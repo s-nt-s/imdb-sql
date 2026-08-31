@@ -64,6 +64,9 @@ class Req:
             wait = (wait_if_status or {}).get(e.code, 0)
             if wait <= 0:
                 raise
+        except JSONDecodeError as e:
+            logger.critical(f"NOT JSON {url}")
+            raise
         sleep(wait)
         return self.get_json(url, headers, data, wait_if_status=tuple())
 
